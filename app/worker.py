@@ -75,16 +75,17 @@ class PreviewWorker(threading.Thread):
                             wx, zone, hit = None, None, False
                         bar_img = thumb_bar(bar_rgb, wx, zone, hit)
                     except Exception:
-                        pass
+                        bar_img = None
                 if all(k in sub_roi for k in ("left", "top", "width", "height")):
                     try:
                         box = resolve_roi(sct.monitors[0], sub_roi)
                         raw = np.asarray(sct.grab(box))
                         sub_img = thumb_sub(bgr_to_rgb(raw))
                     except Exception:
-                        pass
+                        sub_img = None
                 dt = max(1e-6, time.perf_counter() - t0)
-                fps_ema = fps_ema * 0.85 + (1.0 / dt) * 0.15
+                # Show capture rate, not inverse of one frame (was ~168 and useless)
+                fps_ema = fps_ema * 0.85 + min(60.0, 1.0 / dt) * 0.15
                 if bar_img is not None or sub_img is not None:
                     self.frames.push(bar_img, sub_img, fps_ema)
                 sleep = target - (time.perf_counter() - t0)

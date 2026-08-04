@@ -318,14 +318,32 @@ def annotate_bar(rgb: np.ndarray, white_x: int | None, zone: tuple[int, int] | N
     return Image.fromarray(arr)
 
 
+def _fit_preview(img: Image.Image, tw: int, th: int, bg: tuple[int, int, int] = (18, 18, 22)) -> Image.Image:
+    """Letterbox into fixed size so Tk canvases always show a clear frame."""
+    from PIL import ImageOps
+
+    canvas = Image.new("RGB", (tw, th), bg)
+    # thin cyan frame
+    for x in range(tw):
+        canvas.putpixel((x, 0), (0, 200, 220))
+        canvas.putpixel((x, th - 1), (0, 200, 220))
+    for y in range(th):
+        canvas.putpixel((0, y), (0, 200, 220))
+        canvas.putpixel((tw - 1, y), (0, 200, 220))
+    fitted = ImageOps.contain(img.convert("RGB"), (tw - 6, th - 6), Image.Resampling.BILINEAR)
+    x = (tw - fitted.width) // 2
+    y = (th - fitted.height) // 2
+    canvas.paste(fitted, (x, y))
+    return canvas
+
+
 def thumb_bar(rgb: np.ndarray, white_x: int | None, zone: tuple[int, int] | None, hit: bool) -> Image.Image:
-    """Preview for UI."""
+    """Preview for UI — fixed 400×80 so the bar strip is always readable."""
     img = annotate_bar(rgb, white_x, zone, hit)
-    img.thumbnail((360, 90), Image.Resampling.BILINEAR)
-    return img
+    return _fit_preview(img, 400, 80)
 
 
 def thumb_sub(rgb: np.ndarray) -> Image.Image:
+    """Preview for UI — fixed 400×140 subtitle crop."""
     img = Image.fromarray(rgb)
-    img.thumbnail((360, 160), Image.Resampling.BILINEAR)
-    return img
+    return _fit_preview(img, 400, 140)

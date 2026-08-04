@@ -1,13 +1,16 @@
-Сайт раздачи (Flask, без CORS):
+Сайт Flask (лицензия + скачивание, без CORS):
 
-Вариант A — Render 24/7 (имя fucksvinland):
-  1. Зайди на https://render.com  (Sign in with GitHub)
-  2. Открой: https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
-  3. Apply → URL: https://fucksvinland.onrender.com
+СЕЙЧАС (ПК включён, туннель):
+  https://cat-daniel-ent-throat.trycloudflare.com
 
-Вариант B — сейчас с ПК (Cloudflare, без IP):
-  site\run_public.bat
-  в консоли появится https://….trycloudflare.com
+ИМЯ fucksvinland (24/7):
+  https://fucksvinland.onrender.com
+  Деплой: https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
+  (Sign in with GitHub → Apply)
 
-Временная страница на GitHub (только скачивание, без pad):
+Почему не fucksvinland.trycloudflare.com:
+  Cloudflare quick tunnel выдаёт только случайный поддомен.
+  Своё имя = Render или свой домен + Cloudflare Tunnel (аккаунт).
+
+Статика (скачивание с GitHub Releases, без pad):
   https://offjext.github.io/fucksvinland/

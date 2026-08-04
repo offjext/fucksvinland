@@ -19,8 +19,8 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("fucksvinland")
-        self.geometry("420x560")
-        self.minsize(380, 480)
+        self.geometry("440x640")
+        self.minsize(400, 580)
         self.configure(bg="#1a1a1a")
         self.attributes("-topmost", True)
 
@@ -41,13 +41,14 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.preview_worker = PreviewWorker(
-            get_cfg=lambda: self.cfg,
+            get_cfg=self._live_cfg,
             frames=self.frames,
             alive=lambda: self.app_alive,
             is_paused=lambda: self.preview_paused,
         )
         self.preview_worker.start()
-        self.after(100, self._ui_tick)
+        self.after(80, self._ui_tick)
+        self.after(200, self._force_preview_once)
         self.after(400, self._check_update)
 
         try:
@@ -91,19 +92,25 @@ class App(tk.Tk):
         ttk.Label(status_row, textvariable=self.status_var, style="Status.TLabel").pack(side=tk.LEFT)
         ttk.Label(status_row, textvariable=self.fps_var).pack(side=tk.RIGHT)
 
-        # Fixed-height preview panes (log expand was collapsing them to black)
+        # Fixed pixel canvases — Label+char-height was collapsing to a black strip
         prev = ttk.Frame(root)
         prev.pack(fill=tk.X, pady=(0, 4))
-        ttk.Label(prev, text="бар").pack(anchor="w")
-        self.preview_bar = tk.Label(prev, bg="#0a0a0a", width=50, height=5)
-        self.preview_bar.pack(fill=tk.X, pady=(0, 4))
-        ttk.Label(prev, text="текст").pack(anchor="w")
-        self.preview_sub = tk.Label(prev, bg="#0a0a0a", width=50, height=8)
-        self.preview_sub.pack(fill=tk.X, pady=(0, 2))
+        ttk.Label(prev, text="что видит бар").pack(anchor="w")
+        self.canvas_bar = tk.Canvas(
+            prev, width=400, height=80, bg="#0a0a0a", highlightthickness=1, highlightbackground="#00c8dc"
+        )
+        self.canvas_bar.pack(pady=(0, 6))
+        self.canvas_bar.create_text(200, 40, text="выбери зону: Бар", fill="#555", font=("Segoe UI", 10))
+        ttk.Label(prev, text="что видит текст (субтитры)").pack(anchor="w")
+        self.canvas_sub = tk.Canvas(
+            prev, width=400, height=140, bg="#0a0a0a", highlightthickness=1, highlightbackground="#00c8dc"
+        )
+        self.canvas_sub.pack(pady=(0, 2))
+        self.canvas_sub.create_text(200, 70, text="выбери зону: Текст", fill="#555", font=("Segoe UI", 10))
 
         self.log_box = tk.Text(
             root,
-            height=6,
+            height=5,
             bg="#111",
             fg="#aaa",
             insertbackground="#aaa",
@@ -112,24 +119,56 @@ class App(tk.Tk):
         )
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
+    def _live_cfg(self) -> dict:
+        """Always prefer in-memory cfg (updated on zone pick)."""
+        return self.cfg
+
+    def _show_preview(self, which: str, img) -> None:
+        photo = ImageTk.PhotoImage(img)
+        if which == "bar":
+            self._photo_bar = photo
+            c = self.canvas_bar
+            c.delete("all")
+            c.create_image(200, 40, image=photo)
+        else:
+            self._photo_sub = photo
+            c = self.canvas_sub
+            c.delete("all")
+            c.create_image(200, 70, image=photo)
+
+    def _force_preview_once(self) -> None:
+        """Immediate snapshot of saved zones so panes aren't empty on start."""
+        try:
+            import mss
+            import numpy as np
+            from .bar import bgr_to_rgb, thumb_bar, thumb_sub
+            from .roi import resolve_roi
+
+            with mss.mss() as sct:
+                mon = sct.monitors[0]
+                bar_roi = self.cfg.get("bar_roi") or {}
+                sub_roi = self.cfg.get("subtitle_roi") or {}
+                if all(k in bar_roi for k in ("left", "top", "width", "height")):
+                    raw = np.asarray(sct.grab(resolve_roi(mon, bar_roi)))
+                    self._show_preview("bar", thumb_bar(bgr_to_rgb(raw), None, None, False))
+                if all(k in sub_roi for k in ("left", "top", "width", "height")):
+                    raw = np.asarray(sct.grab(resolve_roi(mon, sub_roi)))
+                    self._show_preview("sub", thumb_sub(bgr_to_rgb(raw)))
+        except Exception as e:
+            self.append_log(f"превью: {e}")
+
     def _ui_tick(self) -> None:
         if not self.app_alive:
             return
         bar, sub, fps, seq = self.frames.pull()
         if seq != self._preview_seq:
             self._preview_seq = seq
-            self.fps_var.set(f"{fps:.0f}")
+            self.fps_var.set(f"{fps:.0f} fps")
             if bar is not None:
-                self._photo_bar = ImageTk.PhotoImage(bar)
-                self.preview_bar.configure(
-                    image=self._photo_bar, width=bar.width, height=bar.height
-                )
+                self._show_preview("bar", bar)
             if sub is not None:
-                self._photo_sub = ImageTk.PhotoImage(sub)
-                self.preview_sub.configure(
-                    image=self._photo_sub, width=sub.width, height=sub.height
-                )
-        self.after(100, self._ui_tick)
+                self._show_preview("sub", sub)
+        self.after(80, self._ui_tick)
 
     def _check_update(self) -> None:
         def work() -> None:
@@ -186,7 +225,6 @@ class App(tk.Tk):
         self.cfg["language"] = "en"
         self.save_config()
         self.refresh_zone_labels()
-        # force immediate preview of new crop
         try:
             import mss
             import numpy as np
@@ -196,13 +234,9 @@ class App(tk.Tk):
                 raw = np.asarray(sct.grab(box))
                 rgb = bgr_to_rgb(raw)
                 if key == "bar_roi":
-                    img = thumb_bar(rgb, None, None, False)
-                    self._photo_bar = ImageTk.PhotoImage(img)
-                    self.preview_bar.configure(image=self._photo_bar, width=img.width, height=img.height)
+                    self._show_preview("bar", thumb_bar(rgb, None, None, False))
                 else:
-                    img = thumb_sub(rgb)
-                    self._photo_sub = ImageTk.PhotoImage(img)
-                    self.preview_sub.configure(image=self._photo_sub, width=img.width, height=img.height)
+                    self._show_preview("sub", thumb_sub(rgb))
         except Exception as e:
             self.append_log(f"превью: {e}")
 
