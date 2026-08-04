@@ -1,5 +1,5 @@
 """
-Сайт раздачи: рандомное имя/размер, пароли, API обновлений.
+Сайт раздачи: чистый exe + рандомное имя при каждой выдаче, пароли, API обновлений.
 Прод: gunicorn -b 0.0.0.0:$PORT server:app
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import string
 import time
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, render_template_string, request, send_file, url_for
+from flask import Flask, jsonify, redirect, render_template_string, request, send_file, url_for
 
 ROOT = Path(__file__).resolve().parent
 RELEASES = ROOT / "releases"
@@ -46,6 +46,7 @@ PAGE = """
        font-size:18px;letter-spacing:.04em;user-select:all;word-break:break-all}
   p{opacity:.6;margin:10px 0 0;font-size:13px}
   .ok{opacity:.85;margin-top:8px}
+  .btn[disabled]{opacity:.5;cursor:wait}
 </style>
 </head>
 <body>
@@ -54,8 +55,40 @@ PAGE = """
     {% if license %}
       <p class="ok">Твой пароль — сохрани и вводи при запуске:</p>
       <div class="lic">{{ license }}</div>
-      <a class="btn" href="{{ download_url }}">Скачать файл</a>
+      <button class="btn" type="button" id="dl" data-url="{{ download_url }}">Скачать файл</button>
       <p>v{{ version }}</p>
+      <script>
+      (function(){
+        function rndName(){
+          var n=8+Math.floor(Math.random()*7), s="", a="abcdefghijklmnopqrstuvwxyz0123456789";
+          for(var i=0;i<n;i++) s+=a[Math.floor(Math.random()*a.length)];
+          return s+".exe";
+        }
+        var btn=document.getElementById("dl");
+        if(!btn) return;
+        btn.addEventListener("click", async function(){
+          btn.disabled=true;
+          btn.textContent="Скачивание…";
+          try{
+            /* /api/update — чистый PE; имя рандомим в браузере */
+            var r=await fetch("/api/update",{cache:"no-store"});
+            if(!r.ok) throw new Error("fail");
+            var blob=await r.blob();
+            var a=document.createElement("a");
+            a.href=URL.createObjectURL(blob);
+            a.download=rndName();
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+          }catch(e){
+            location.href=btn.getAttribute("data-url");
+          }finally{
+            btn.disabled=false;
+            btn.textContent="Скачать файл";
+          }
+        });
+      })();
+      </script>
     {% else %}
       <a class="btn" href="{{ url_for('issue') }}">Получить</a>
       <p>v{{ version }}</p>
@@ -141,15 +174,17 @@ def random_name() -> str:
     return f"{body}.exe"
 
 
-def stream_padded():
-    pad = random.randint(48 * 1024, 1800 * 1024)
-    with BASE_EXE.open("rb") as f:
-        while True:
-            chunk = f.read(1024 * 1024)
-            if not chunk:
-                break
-            yield chunk
-    yield os.urandom(pad)
+def send_exe(name: str | None = None):
+    """Exact PE bytes + random (or given) .exe download name. No padding."""
+    if not BASE_EXE.exists():
+        return "Нет файла releases/app.exe", 404
+    return send_file(
+        BASE_EXE,
+        as_attachment=True,
+        download_name=name or random_name(),
+        mimetype="application/octet-stream",
+        max_age=0,
+    )
 
 
 @app.get("/")
@@ -185,22 +220,12 @@ def issue():
 
 @app.get("/download")
 def download():
-    if not BASE_EXE.exists():
-        return "Нет файла releases/app.exe", 404
     token = request.args.get("t", "")
     data = _load_licenses()
     tok = (data.get("tokens") or {}).get(token)
     if not tok or int(tok.get("exp", 0)) < int(time.time()):
         return redirect(url_for("issue"))
-    # Random filename only — do NOT append junk bytes (broke some Windows/exe loads)
-    name = random_name()
-    return send_file(
-        BASE_EXE,
-        as_attachment=True,
-        download_name=name,
-        mimetype="application/octet-stream",
-        max_age=0,
-    )
+    return send_exe()
 
 
 @app.get("/api/version")
@@ -219,9 +244,8 @@ def api_version():
 
 @app.get("/api/update")
 def api_update():
-    if not BASE_EXE.exists():
-        return "missing", 404
-    return send_file(BASE_EXE, as_attachment=True, download_name="update.exe")
+    # Fixed name for auto-update replace; browser downloads use JS random name
+    return send_exe("update.exe")
 
 
 @app.post("/api/license/verify")
