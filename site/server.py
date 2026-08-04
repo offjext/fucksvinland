@@ -257,11 +257,14 @@ RELEASES.mkdir(parents=True, exist_ok=True)
 
 def ensure_exe() -> None:
     """Pull app.exe from GitHub Release when missing or version outdated."""
-    url = os.environ.get(
-        "EXE_URL",
-        "https://github.com/offjext/fucksvinland/releases/download/v1.0.2/app.exe",
+    want = (os.environ.get("EXE_VERSION") or "1.0.2").strip()
+    default_url = (
+        f"https://github.com/offjext/fucksvinland/releases/download/v{want}/app.exe"
     )
-    want = os.environ.get("EXE_VERSION", "1.0.2").strip()
+    url = os.environ.get("EXE_URL") or default_url
+    # Old Render env may still point at v1.0.1 — force URL to match wanted version
+    if f"/v{want}/" not in url.replace("\\", "/"):
+        url = default_url
     meta = load_meta() if META.exists() else {}
     have = str(meta.get("version", "")).strip()
     ok_file = BASE_EXE.exists() and BASE_EXE.stat().st_size > 1_000_000

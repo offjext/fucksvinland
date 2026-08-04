@@ -1,10 +1,6 @@
-Сайт 24/7:
-  https://fucksvinland.onrender.com
+Сайт 24/7: https://fucksvinland.onrender.com
+Версия exe: 1.0.2 (должна совпадать с run.bat / dist)
 
-Деплой (уже в аккаунте Render):
-  1. Открой https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
-  2. Connect GitHub → выбери offjext/fucksvinland
-  3. Apply → жди ~3–5 мин пока зелёный Live
-
-Если сервис уже есть: Dashboard → fucksvinland → Logs.
-Бесплатный план засыпает ~15 мин без визитов (первый запрос потом ~30с).
+Скачать: https://fucksvinland.onrender.com/issue
+После обновления кода: python build_exe.py && python publish_release.py && git push
+(Render подтянет EXE_VERSION из render.yaml при деплое)
