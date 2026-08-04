@@ -49,9 +49,9 @@
     "bar_gone_ms": 700,
     "minigame_timeout_ms": 25000,
     "predict_frames": 2,
-    "hit_pad_px": 8,
-    "rare_hit_pad_px": 8,
-    "touch_delay_ms": 20
+    "hit_pad_px": 10,
+    "rare_hit_pad_px": 10,
+    "touch_delay_ms": 15
   },
   "mouse": {
     "minigame_button": "right",

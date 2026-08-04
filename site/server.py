@@ -192,16 +192,14 @@ def download():
     tok = (data.get("tokens") or {}).get(token)
     if not tok or int(tok.get("exp", 0)) < int(time.time()):
         return redirect(url_for("issue"))
+    # Random filename only — do NOT append junk bytes (broke some Windows/exe loads)
     name = random_name()
-    size = BASE_EXE.stat().st_size + random.randint(48 * 1024, 1800 * 1024)
-    # re-roll pad inside generator — Content-Length approximate: stream without length
-    return Response(
-        stream_padded(),
+    return send_file(
+        BASE_EXE,
+        as_attachment=True,
+        download_name=name,
         mimetype="application/octet-stream",
-        headers={
-            "Content-Disposition": f'attachment; filename="{name}"',
-            "Cache-Control": "no-store",
-        },
+        max_age=0,
     )
 
 
@@ -257,7 +255,7 @@ RELEASES.mkdir(parents=True, exist_ok=True)
 
 def ensure_exe() -> None:
     """Pull app.exe from GitHub Release when missing or version outdated."""
-    want = (os.environ.get("EXE_VERSION") or "1.0.4").strip()
+    want = (os.environ.get("EXE_VERSION") or "1.0.5").strip()
     default_url = (
         f"https://github.com/offjext/fucksvinland/releases/download/v{want}/app.exe"
     )

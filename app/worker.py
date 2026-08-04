@@ -323,9 +323,9 @@ class FishWorker(threading.Thread):
                         visible = True
 
                     use_pad = rare_pad if (rare or is_yellow) else pad
-                    # Mini: stick on blue/yellow (+ tiny predict toward block while approaching)
+                    # Mini: only real overlap on the colored block (predict broke frozen exe timing)
                     if state == "mini":
-                        in_zone = should_hit(white_x, zone, prev_x, use_pad, 2)
+                        in_zone = should_hit(white_x, zone, None, use_pad, 0)
                         if not in_zone and zone is not None:
                             in_zone = bright_stick_in_zone(bar_raw, zone)
                     else:
@@ -450,13 +450,12 @@ class FishWorker(threading.Thread):
                             autofix("нет полоски")
 
                     elif state == "mini":
-                        # Stick moves by itself → when it hits blue OR rare yellow → 1× RMB
-                        # Yellow can appear many times: each new target gets its own click
+                        # Stick on blue OR rare yellow → wait touch_delay → 1× RMB per entry
+                        # Yellow can appear many times (new target / leave+reenter)
                         if visible and zone is not None:
                             bar_missing_since = 0.0
                             if is_yellow:
                                 rare = True
-                            # New colored block (blue→yellow or zone jumped) = new click opportunity
                             sig = (
                                 int(zone[0] // 6),
                                 int(zone[1] // 6),
@@ -468,41 +467,35 @@ class FishWorker(threading.Thread):
                                 pending_hit = False
                                 touch_at = 0.0
 
-                            do_click = False
                             if in_zone and not was_in_zone:
                                 touch_at = now
                                 pending_hit = True
                             if not in_zone:
                                 pending_hit = False
                                 touch_at = 0.0
-                            elif (
-                                pending_hit
-                                and touch_at > 0
-                                and (now - touch_at) >= touch_delay
-                                and (now - last_click) >= hit_cooldown
-                            ):
-                                # Prefer real overlap at click time (not only predict)
-                                on_block = should_hit(white_x, zone, None, use_pad, 0)
-                                if not on_block:
-                                    on_block = bright_stick_in_zone(bar_raw, zone)
-                                if on_block or (now - touch_at) >= touch_delay + 0.03:
-                                    do_click = True
-                                    pending_hit = False
-                            if do_click:
-                                mini_click()
-                                last_click = now
-                                self.status("клик" + (" ★" if is_yellow or rare else ""))
-                                self.log("мини RMB" + (" yellow" if is_yellow else " blue"))
-                            elif pending_hit and touch_at > 0:
-                                left = max(0.0, touch_delay - (now - touch_at))
-                                self.status(f"мини {left*1000:.0f}мс")
+                                was_in_zone = False
                             else:
-                                self.status(
-                                    "мини"
-                                    + (" ★" if is_yellow else "")
-                                    + (" ·" if in_zone else "")
-                                )
-                            was_in_zone = in_zone
+                                was_in_zone = True
+                                if (
+                                    pending_hit
+                                    and touch_at > 0
+                                    and (now - touch_at) >= touch_delay
+                                    and (now - last_click) >= hit_cooldown
+                                ):
+                                    mini_click()
+                                    last_click = now
+                                    pending_hit = False
+                                    self.status("клик" + (" ★" if is_yellow or rare else ""))
+                                    self.log("мини RMB" + (" yellow" if is_yellow else " blue"))
+                                elif pending_hit and touch_at > 0:
+                                    left = max(0.0, touch_delay - (now - touch_at))
+                                    self.status(f"мини {left*1000:.0f}мс")
+                                else:
+                                    self.status(
+                                        "мини"
+                                        + (" ★" if is_yellow else "")
+                                        + " ·"
+                                    )
                         else:
                             was_in_zone = False
                             pending_hit = False
@@ -511,7 +504,6 @@ class FishWorker(threading.Thread):
                             if bar_missing_since <= 0:
                                 bar_missing_since = now
                             else:
-                                # Rare yellow waves: wait longer before giving up
                                 limit = bar_gone_s * (3.0 if rare else 1.0)
                                 if (now - bar_missing_since) >= limit:
                                     autofix("полоска пропала")

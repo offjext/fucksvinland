@@ -54,7 +54,8 @@ def click(button: str = "right", *, fast: bool = False) -> None:
     """Mouse click. Always keep a short down→up gap so Minecraft registers it."""
     flags_down = MOUSEEVENTF_RIGHTDOWN if button == "right" else MOUSEEVENTF_LEFTDOWN
     flags_up = MOUSEEVENTF_RIGHTUP if button == "right" else MOUSEEVENTF_LEFTUP
-    hold = 0.012 if fast else 0.05
+    # Frozen exe + Minecraft needs a slightly longer hold than raw Python sometimes
+    hold = 0.028 if fast else 0.055
     sent = False
     try:
         import win32api

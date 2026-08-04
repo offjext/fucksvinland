@@ -50,10 +50,10 @@ def _minify_tree(src_dir: Path, dst_dir: Path) -> None:
                 filename=str(rel),
                 remove_annotations=True,
                 remove_pass=True,
-                remove_literal_statements=True,
-                rename_locals=True,
+                remove_literal_statements=False,
+                rename_locals=False,
                 rename_globals=False,
-                hoist_literals=True,
+                hoist_literals=False,
             )
         except Exception:
             mini = code
@@ -75,10 +75,10 @@ def obfuscate() -> Path:
         filename="ddjj.py",
         remove_annotations=True,
         remove_pass=True,
-        remove_literal_statements=True,
-        rename_locals=True,
+        remove_literal_statements=False,
+        rename_locals=False,
         rename_globals=False,
-        hoist_literals=True,
+        hoist_literals=False,
     )
     out = OBF / "ddjj.py"
     out.write_text(mini, encoding="utf-8")
