@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ddjj-site
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: LICENSE_SECRET
+        generateValue: true
+      - key: PORT
+        value: "8080"

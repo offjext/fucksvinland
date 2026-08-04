@@ -1,0 +1,19 @@
+# Build / IDE
+_build/
+dist/
+tools/
+**/__pycache__/
+*.pyc
+.venv/
+ddjj_full_backup.py
+site/cloudflared.exe
+site/releases/*.exe
+site/releases/licenses.json
+*.zip
+
+# Keep pages sources
+!site/static_pages/
+
+debug_*.png
+pyarmor.bug.log
+site/PUBLIC_URL.txt

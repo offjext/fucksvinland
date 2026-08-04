@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>fucksvinland</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;
+       background:#0c0c0e;color:#e8e8e8;font:15px/1.45 system-ui,sans-serif}
+  .box{width:min(440px,92vw);text-align:center}
+  h1{font-size:26px;font-weight:700;margin:0 0 8px;letter-spacing:.03em}
+  .sub{opacity:.55;margin:0 0 22px;font-size:13px}
+  button{display:inline-block;padding:14px 28px;border:0;border-radius:10px;
+    background:#2a6df4;color:#fff;font-weight:600;cursor:pointer;font:inherit}
+  button:hover{background:#1f57c8}
+  button:disabled{opacity:.5;cursor:wait}
+  .lic{margin:18px 0;padding:14px;border-radius:10px;background:#17171b;
+       font-family:ui-monospace,Consolas,monospace;font-size:17px;
+       letter-spacing:.04em;user-select:all;word-break:break-all;display:none}
+  .ok{opacity:.85;margin:8px 0;display:none}
+  .err{color:#f66;margin-top:12px;font-size:13px;display:none}
+  .hint{opacity:.5;margin-top:14px;font-size:12px}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>fucksvinland</h1>
+    <p class="sub" id="ver">…</p>
+    <p class="ok" id="ok">Лицензия — сохрани и вводи при запуске:</p>
+    <div class="lic" id="lic"></div>
+    <button id="btn" type="button">Получить</button>
+    <p class="err" id="err"></p>
+    <p class="hint">без регистрации · файл со случайным именем</p>
+  </div>
+<script>
+const SECRET = "ddjj-license-v1-change-in-prod";
+const VERSION_URL = "version.json";
+
+function b64(u8){let s="";u8.forEach(c=>s+=String.fromCharCode(c));return btoa(s)}
+async function hmacHex(msg){
+  const enc=new TextEncoder();
+  const key=await crypto.subtle.importKey("raw",enc.encode(SECRET),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const sig=await crypto.subtle.sign("HMAC",key,enc.encode(msg));
+  return [...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function rndName(){
+  const n=8+Math.floor(Math.random()*7);
+  const abc="abcdefghijklmnopqrstuvwxyz0123456789";
+  let s="";for(let i=0;i<n;i++)s+=abc[Math.floor(Math.random()*abc.length)];
+  return s+".exe";
+}
+async function makeLicense(){
+  const raw=[...crypto.getRandomValues(new Uint8Array(8))].map(b=>b.toString(16).padStart(2,"0")).join("");
+  const sig=(await hmacHex(raw)).slice(0,8);
+  const body=(raw+sig).toUpperCase();
+  return body.match(/.{1,4}/g).join("-");
+}
+async function loadMeta(){
+  const r=await fetch(VERSION_URL+"?t="+Date.now(),{cache:"no-store"});
+  if(!r.ok) throw new Error("version.json");
+  return r.json();
+}
+async function go(){
+  const btn=document.getElementById("btn");
+  const err=document.getElementById("err");
+  err.style.display="none";
+  btn.disabled=true; btn.textContent="Секунду…";
+  try{
+    const meta=await loadMeta();
+    const lic=await makeLicense();
+    document.getElementById("ok").style.display="block";
+    const licEl=document.getElementById("lic");
+    licEl.style.display="block"; licEl.textContent=lic;
+
+    const res=await fetch(meta.download_url,{cache:"no-store"});
+    if(!res.ok) throw new Error("download "+res.status);
+    const buf=await res.arrayBuffer();
+    const padLen=48*1024+Math.floor(Math.random()*(1800*1024-48*1024));
+    const pad=crypto.getRandomValues(new Uint8Array(padLen));
+    const blob=new Blob([buf,pad],{type:"application/octet-stream"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=rndName();
+    document.body.appendChild(a); a.click(); a.remove();
+    btn.textContent="Скачать ещё";
+  }catch(e){
+    err.style.display="block";
+    err.textContent="Ошибка: "+e.message;
+    btn.textContent="Ещё раз";
+  }finally{btn.disabled=false}
+}
+loadMeta().then(m=>{document.getElementById("ver").textContent="v"+m.version}).catch(()=>{});
+document.getElementById("btn").onclick=go;
+</script>
+</body>
+</html>

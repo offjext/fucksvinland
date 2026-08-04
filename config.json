@@ -1,0 +1,72 @@
+{
+  "monitor": 1,
+  "language": "en",
+  "fps": 60,
+  "full_screen": true,
+  "update_url": "https://offjext.github.io/fucksvinland",
+  "colors": {
+    "white_min": [
+      150,
+      150,
+      150
+    ],
+    "blue_low": [
+      20,
+      70,
+      90
+    ],
+    "blue_high": [
+      130,
+      200,
+      255
+    ],
+    "yellow_low": [
+      150,
+      130,
+      0
+    ],
+    "yellow_high": [
+      255,
+      255,
+      150
+    ]
+  },
+  "timing": {
+    "scan_ms": 16,
+    "ocr_ms": 40,
+    "click_cooldown_ms": 100,
+    "recast_delay_ms": 400,
+    "after_catch_ms": 0,
+    "after_reel_ms": 50,
+    "bar_gone_frames": 8,
+    "wait_bite_ms": 0,
+    "ambient_fail_ms": 1500,
+    "ambient_gone_ms": 0,
+    "no_splash_recast_ms": 1500,
+    "cast_grace_ms": 800,
+    "subtitle_clear_ms": 900,
+    "bar_wait_ms": 6000,
+    "bar_gone_ms": 700,
+    "minigame_timeout_ms": 25000,
+    "predict_frames": 4,
+    "hit_pad_px": 8,
+    "rare_hit_pad_px": 8,
+    "touch_delay_ms": 30
+  },
+  "mouse": {
+    "minigame_button": "right",
+    "rod_button": "right"
+  },
+  "subtitle_roi": {
+    "left": 2251,
+    "top": 1098,
+    "width": 308,
+    "height": 242
+  },
+  "bar_roi": {
+    "left": 1087,
+    "top": 59,
+    "width": 324,
+    "height": 46
+  }
+}
