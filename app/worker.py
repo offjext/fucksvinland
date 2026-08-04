@@ -59,12 +59,12 @@ class PreviewWorker(threading.Thread):
                     time.sleep(0.05)
                     continue
                 t0 = time.perf_counter()
+                bar_img = sub_img = None
                 cfg = self.get_cfg()
                 bar_roi = cfg.get("bar_roi", {})
                 sub_roi = cfg.get("subtitle_roi", {})
-                bar_img = sub_img = None
-                try:
-                    if all(k in bar_roi for k in ("left", "top", "width", "height")):
+                if all(k in bar_roi for k in ("left", "top", "width", "height")):
+                    try:
                         box = resolve_roi(sct.monitors[0], bar_roi)
                         raw = np.asarray(sct.grab(box))
                         bar_rgb = bgr_to_rgb(raw)
@@ -74,13 +74,15 @@ class PreviewWorker(threading.Thread):
                         except Exception:
                             wx, zone, hit = None, None, False
                         bar_img = thumb_bar(bar_rgb, wx, zone, hit)
-                    if all(k in sub_roi for k in ("left", "top", "width", "height")):
+                    except Exception:
+                        pass
+                if all(k in sub_roi for k in ("left", "top", "width", "height")):
+                    try:
                         box = resolve_roi(sct.monitors[0], sub_roi)
                         raw = np.asarray(sct.grab(box))
                         sub_img = thumb_sub(bgr_to_rgb(raw))
-                except Exception:
-                    # keep last frame; still tick so UI stays alive
-                    pass
+                    except Exception:
+                        pass
                 dt = max(1e-6, time.perf_counter() - t0)
                 fps_ema = fps_ema * 0.85 + (1.0 / dt) * 0.15
                 if bar_img is not None or sub_img is not None:

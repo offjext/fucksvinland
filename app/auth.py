@@ -77,7 +77,7 @@ def ask_access_password(cfg: dict | None = None) -> bool:
 
 
 def check_and_apply_update(cfg: dict) -> str | None:
-    """Download newer build from update_url/version.json (GitHub Pages) if available."""
+    """Download newer build from update_url (/api/version or /version.json)."""
     import urllib.request
 
     base = str(cfg.get("update_url") or "").rstrip("/")
@@ -86,16 +86,24 @@ def check_and_apply_update(cfg: dict) -> str | None:
     if not getattr(sys, "frozen", False):
         return None
 
-    ver_url = f"{base}/version.json"
-    with urllib.request.urlopen(ver_url, timeout=8) as r:
-        info = json.loads(r.read().decode("utf-8"))
+    info = None
+    dl = ""
+    for path in ("/api/version", "/version.json"):
+        try:
+            with urllib.request.urlopen(base + path, timeout=8) as r:
+                info = json.loads(r.read().decode("utf-8"))
+            break
+        except Exception:
+            continue
+    if not info:
+        return None
     remote = str(info.get("version") or "")
     if not remote or remote == APP_VERSION:
         return None
 
     dl = str(info.get("download_url") or "")
     if not dl:
-        return None
+        dl = f"{base}/api/update"
     data = urllib.request.urlopen(dl, timeout=180).read()
     expect = str(info.get("sha256") or "")
     if expect:

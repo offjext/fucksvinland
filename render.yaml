@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: fucksvinland
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: site
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -b 0.0.0.0:$PORT -w 1 --timeout 600 server:app
+    healthCheckPath: /health
+    envVars:
+      - key: LICENSE_SECRET
+        value: ddjj-license-v1-change-in-prod
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: EXE_URL
+        value: https://github.com/offjext/fucksvinland/releases/download/v1.0.1/app.exe

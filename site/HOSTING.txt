@@ -1,14 +1,12 @@
-# Бесплатный хостинг 24/7 (Render)
+# Сайт 24/7: https://fucksvinland.onrender.com
+# (после деплоя Render Blueprint из этого репо)
 
-1. Зарегистрируйся на https://render.com (бесплатно)
-2. New → Blueprint → укажи папку `site` (или этот репозиторий, rootDir: site)
-3. Deploy. Получишь URL вида https://xxxx.onrender.com
-4. В config.json клиентов:
-   "update_url": "https://xxxx.onrender.com"
+Деплой:
+1. Открой https://dashboard.render.com/select-repo?type=blueprint
+2. Выбери репозиторий offjext/fucksvinland
+3. Apply → сервис fucksvinland
 
-Важно:
-- На Free Render сервис «засыпает» без трафика ~15 мин, первый заход может подождать 30–60 сек — потом снова онлайн.
-- После каждой сборки `build_exe.py` копирует exe в site/releases/app.exe — залей обновлённый `site` на Render (или Git push).
+Или кнопка:
+https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
 
-Локально 24/7 на своём ПК не получится без включённого компа.
-Для настоящего always-on без засыпания нужен платный план Render / Fly / VPS.
+Первый старт качает app.exe сам. Бесплатный план может «заснуть» без визитов ~15 мин.

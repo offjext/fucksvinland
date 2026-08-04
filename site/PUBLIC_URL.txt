@@ -1,8 +1,1 @@
-https://fucksvinland.loca.lt
-
-Работает через localtunnel, пока запущены:
-  - python site/server.py
-  - npx localtunnel --port 8080 --subdomain fucksvinland
-
-Первый заход на loca.lt может показать кнопку Continue — это их защита.
-Для постоянного домена без ПК — Render + свой DNS (HOSTING.txt).
+https://offjext.github.io/fucksvinland/

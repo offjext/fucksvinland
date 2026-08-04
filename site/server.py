@@ -253,6 +253,29 @@ def api_publish():
 
 
 RELEASES.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_exe() -> None:
+    """If app.exe missing on host, pull once from GitHub Release (server-side)."""
+    if BASE_EXE.exists() and BASE_EXE.stat().st_size > 1_000_000:
+        return
+    url = os.environ.get(
+        "EXE_URL",
+        "https://github.com/offjext/fucksvinland/releases/download/v1.0.1/app.exe",
+    )
+    try:
+        import urllib.request
+
+        print("Downloading app.exe…", url)
+        RELEASES.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(url, BASE_EXE)
+        refresh_hash()
+        print("app.exe ready", BASE_EXE.stat().st_size)
+    except Exception as e:
+        print("exe download failed:", e)
+
+
+ensure_exe()
 if BASE_EXE.exists() and not META.exists():
     refresh_hash()
 
