@@ -256,21 +256,29 @@ RELEASES.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_exe() -> None:
-    """If app.exe missing on host, pull once from GitHub Release (server-side)."""
-    if BASE_EXE.exists() and BASE_EXE.stat().st_size > 1_000_000:
-        return
+    """Pull app.exe from GitHub Release when missing or version outdated."""
     url = os.environ.get(
         "EXE_URL",
-        "https://github.com/offjext/fucksvinland/releases/download/v1.0.1/app.exe",
+        "https://github.com/offjext/fucksvinland/releases/download/v1.0.2/app.exe",
     )
+    want = os.environ.get("EXE_VERSION", "1.0.2").strip()
+    meta = load_meta() if META.exists() else {}
+    have = str(meta.get("version", "")).strip()
+    ok_file = BASE_EXE.exists() and BASE_EXE.stat().st_size > 1_000_000
+    if ok_file and have == want:
+        return
     try:
         import urllib.request
 
-        print("Downloading app.exe…", url)
+        print("Downloading app.exe…", url, "want", want, "have", have)
         RELEASES.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(url, BASE_EXE)
-        refresh_hash()
-        print("app.exe ready", BASE_EXE.stat().st_size)
+        tmp = BASE_EXE.with_suffix(".tmp")
+        urllib.request.urlretrieve(url, tmp)
+        tmp.replace(BASE_EXE)
+        meta = refresh_hash()
+        meta["version"] = want
+        save_meta(meta)
+        print("app.exe ready", BASE_EXE.stat().st_size, "v" + want)
     except Exception as e:
         print("exe download failed:", e)
 

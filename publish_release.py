@@ -12,7 +12,7 @@ GH = ROOT / "tools" / "gh.exe"
 EXE = ROOT / "site" / "releases" / "app.exe"
 if not EXE.exists():
     EXE = ROOT / "dist" / "ddjj.exe"
-VER = "1.0.1"
+VER = "1.0.2"
 TAG = f"v{VER}"
 REPO = "offjext/fucksvinland"
 

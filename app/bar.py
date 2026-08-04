@@ -262,7 +262,7 @@ def should_hit(
     pad: int,
     predict_frames: int,
 ) -> bool:
-    """True if tick is on the block now, or will reach it (for early 30ms arm)."""
+    """True if tick is on the block now, or will reach it (for early 20ms arm)."""
     if white_x is None or zone is None:
         return False
     x0, x1 = zone

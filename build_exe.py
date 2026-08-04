@@ -164,7 +164,7 @@ def main() -> None:
 
     raw = (releases / "app.exe").read_bytes()
     meta = {
-        "version": "1.0.1",
+        "version": "1.0.2",
         "sha256": hashlib.sha256(raw).hexdigest(),
         "size": len(raw),
     }

@@ -169,7 +169,7 @@ class FishWorker(threading.Thread):
         cast_gap = max(0.5, recast_pause)
         # see touch / will-hit → wait 30ms → 1× RMB (blue and yellow same)
         hit_cooldown = max(0.08, click_cd / 1000.0)
-        touch_delay = max(0.0, float(t.get("touch_delay_ms", 30)) / 1000.0)
+        touch_delay = max(0.0, float(t.get("touch_delay_ms", 20)) / 1000.0)
         rare_pad = max(pad, int(t.get("rare_hit_pad_px", pad)))
         fps_ema = 60.0
         ui_n = 0
@@ -321,7 +321,7 @@ class FishWorker(threading.Thread):
                         visible = True
 
                     use_pad = rare_pad if (rare or is_yellow) else pad
-                    # Predict blue+yellow so 30ms timer starts before tick fully enters
+                    # Predict blue+yellow so 20ms timer starts before tick fully enters
                     use_predict = max(1, predict)
                     in_zone = should_hit(white_x, zone, prev_x, use_pad, use_predict)
                     if state == "mini" and not in_zone and zone is not None:
@@ -447,13 +447,19 @@ class FishWorker(threading.Thread):
                             if is_yellow:
                                 rare = True
                             do_click = False
-                            # saw will-hit / touch → wait 30ms → one RMB
+                            # blue + yellow: saw will-hit → wait touch_delay_ms (20) → one RMB
                             if in_zone and not was_in_zone:
                                 touch_at = now
                                 pending_hit = True
+                            # brief flicker out of zone during wait: keep pending (don't miss)
                             if not in_zone:
-                                pending_hit = False
-                                touch_at = 0.0
+                                if not (
+                                    pending_hit
+                                    and touch_at > 0
+                                    and (now - touch_at) < touch_delay + 0.04
+                                ):
+                                    pending_hit = False
+                                    touch_at = 0.0
                             elif (
                                 pending_hit
                                 and touch_at > 0
@@ -465,14 +471,16 @@ class FishWorker(threading.Thread):
                             if do_click:
                                 mini_click()
                                 last_click = now
-                                self.status("клик")
+                                self.status("клик" + (" ★" if (rare or is_yellow) else ""))
                             else:
                                 wait_ms = ""
                                 if pending_hit and touch_at > 0:
                                     left = max(0.0, touch_delay - (now - touch_at))
                                     wait_ms = f" {left*1000:.0f}мс"
                                 self.status("мини" + (" ·" if in_zone else "") + wait_ms)
-                            was_in_zone = in_zone
+                            was_in_zone = in_zone if in_zone else (
+                                pending_hit and touch_at > 0 and (now - touch_at) < touch_delay + 0.04
+                            )
                         else:
                             was_in_zone = False
                             pending_hit = False

@@ -51,7 +51,7 @@
     "predict_frames": 4,
     "hit_pad_px": 8,
     "rare_hit_pad_px": 8,
-    "touch_delay_ms": 30
+    "touch_delay_ms": 20
   },
   "mouse": {
     "minigame_button": "right",
@@ -64,9 +64,9 @@
     "height": 242
   },
   "bar_roi": {
-    "left": 1087,
-    "top": 59,
-    "width": 324,
-    "height": 46
+    "left": 1083,
+    "top": 62,
+    "width": 325,
+    "height": 44
   }
 }
