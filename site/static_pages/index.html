@@ -11,9 +11,9 @@
   .box{width:min(440px,92vw);text-align:center}
   h1{font-size:26px;font-weight:700;margin:0 0 8px;letter-spacing:.03em}
   .sub{opacity:.55;margin:0 0 22px;font-size:13px}
-  button{display:inline-block;padding:14px 28px;border:0;border-radius:10px;
-    background:#2a6df4;color:#fff;font-weight:600;cursor:pointer;font:inherit}
-  button:hover{background:#1f57c8}
+  button,a.btn{display:inline-block;padding:14px 28px;border:0;border-radius:10px;
+    background:#2a6df4;color:#fff;font-weight:600;cursor:pointer;font:inherit;text-decoration:none}
+  button:hover,a.btn:hover{background:#1f57c8}
   button:disabled{opacity:.5;cursor:wait}
   .lic{margin:18px 0;padding:14px;border-radius:10px;background:#17171b;
        font-family:ui-monospace,Consolas,monospace;font-size:17px;
@@ -31,24 +31,15 @@
     <div class="lic" id="lic"></div>
     <button id="btn" type="button">Получить</button>
     <p class="err" id="err"></p>
-    <p class="hint">без регистрации · файл со случайным именем</p>
+    <p class="hint">24/7 · без ввода IP</p>
   </div>
 <script>
 const SECRET = "ddjj-license-v1-change-in-prod";
-const VERSION_URL = "version.json";
-
-function b64(u8){let s="";u8.forEach(c=>s+=String.fromCharCode(c));return btoa(s)}
 async function hmacHex(msg){
   const enc=new TextEncoder();
   const key=await crypto.subtle.importKey("raw",enc.encode(SECRET),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   const sig=await crypto.subtle.sign("HMAC",key,enc.encode(msg));
   return [...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,"0")).join("");
-}
-function rndName(){
-  const n=8+Math.floor(Math.random()*7);
-  const abc="abcdefghijklmnopqrstuvwxyz0123456789";
-  let s="";for(let i=0;i<n;i++)s+=abc[Math.floor(Math.random()*abc.length)];
-  return s+".exe";
 }
 async function makeLicense(){
   const raw=[...crypto.getRandomValues(new Uint8Array(8))].map(b=>b.toString(16).padStart(2,"0")).join("");
@@ -57,7 +48,7 @@ async function makeLicense(){
   return body.match(/.{1,4}/g).join("-");
 }
 async function loadMeta(){
-  const r=await fetch(VERSION_URL+"?t="+Date.now(),{cache:"no-store"});
+  const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});
   if(!r.ok) throw new Error("version.json");
   return r.json();
 }
@@ -72,17 +63,14 @@ async function go(){
     document.getElementById("ok").style.display="block";
     const licEl=document.getElementById("lic");
     licEl.style.display="block"; licEl.textContent=lic;
-
-    const res=await fetch(meta.download_url,{cache:"no-store"});
-    if(!res.ok) throw new Error("download "+res.status);
-    const buf=await res.arrayBuffer();
-    const padLen=48*1024+Math.floor(Math.random()*(1800*1024-48*1024));
-    const pad=crypto.getRandomValues(new Uint8Array(padLen));
-    const blob=new Blob([buf,pad],{type:"application/octet-stream"});
+    // Direct navigation — no CORS (Failed to fetch was from fetch() to GitHub Releases)
     const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=rndName();
-    document.body.appendChild(a); a.click(); a.remove();
+    a.href=meta.download_url;
+    a.rel="noopener";
+    a.download="fucksvinland.exe";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     btn.textContent="Скачать ещё";
   }catch(e){
     err.style.display="block";
