@@ -1,10 +1,10 @@
 """
-Build obfuscated ddjj.exe — keeps source in app/ + ddjj.py.
+Build ddjj.exe (no obfuscation) from app/ + ddjj.py, then publish to site.
 """
 from __future__ import annotations
 
-import compileall
-import os
+import hashlib
+import json
 import shutil
 import subprocess
 import sys
@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "ddjj.py"
 APP_SRC = ROOT / "app"
 BUILD = ROOT / "_build"
-OBF = BUILD / "obf"
 DIST = ROOT / "dist"
 WORK = BUILD / "pyi"
 
@@ -29,65 +28,10 @@ def clean() -> None:
         if p.exists():
             shutil.rmtree(p, ignore_errors=True)
     BUILD.mkdir(parents=True, exist_ok=True)
-    OBF.mkdir(parents=True, exist_ok=True)
     DIST.mkdir(parents=True, exist_ok=True)
 
 
-def _minify_tree(src_dir: Path, dst_dir: Path) -> None:
-    import python_minifier
-
-    if dst_dir.exists():
-        shutil.rmtree(dst_dir, ignore_errors=True)
-    dst_dir.mkdir(parents=True, exist_ok=True)
-    for path in src_dir.rglob("*.py"):
-        rel = path.relative_to(src_dir)
-        out = dst_dir / rel
-        out.parent.mkdir(parents=True, exist_ok=True)
-        code = path.read_text(encoding="utf-8")
-        try:
-            mini = python_minifier.minify(
-                code,
-                filename=str(rel),
-                remove_annotations=True,
-                remove_pass=True,
-                remove_literal_statements=False,
-                rename_locals=False,
-                rename_globals=False,
-                hoist_literals=False,
-            )
-        except Exception:
-            mini = code
-        out.write_text(mini, encoding="utf-8")
-
-
-def obfuscate() -> Path:
-    if OBF.exists():
-        shutil.rmtree(OBF, ignore_errors=True)
-    OBF.mkdir(parents=True, exist_ok=True)
-
-    # Minify package + entry (source on disk stays readable)
-    _minify_tree(APP_SRC, OBF / "app")
-    import python_minifier
-
-    entry_code = SRC.read_text(encoding="utf-8")
-    mini = python_minifier.minify(
-        entry_code,
-        filename="ddjj.py",
-        remove_annotations=True,
-        remove_pass=True,
-        remove_literal_statements=False,
-        rename_locals=False,
-        rename_globals=False,
-        hoist_literals=False,
-    )
-    out = OBF / "ddjj.py"
-    out.write_text(mini, encoding="utf-8")
-    compileall.compile_dir(str(OBF), quiet=1)
-    print("Obfuscation: python-minifier OK (app/ + ddjj.py)", flush=True)
-    return out
-
-
-def build_exe(entry: Path) -> Path:
+def build_exe() -> Path:
     hidden = [
         "app",
         "app.ui",
@@ -125,7 +69,7 @@ def build_exe(entry: Path) -> Path:
         "--specpath",
         str(BUILD),
         "--paths",
-        str(OBF),
+        str(ROOT),
         "--collect-all",
         "rapidocr_onnxruntime",
         "--collect-all",
@@ -133,7 +77,7 @@ def build_exe(entry: Path) -> Path:
     ]
     for h in hidden:
         cmd += ["--hidden-import", h]
-    cmd.append(str(entry))
+    cmd.append(str(SRC))
     run(cmd)
 
     exe = DIST / "ddjj.exe"
@@ -153,22 +97,18 @@ def main() -> None:
     if not SRC.exists() or not APP_SRC.exists():
         raise SystemExit("Need ddjj.py and app/ package")
     ver = _version()
-    print(f"Source: {SRC} + {APP_SRC}  v{ver}")
+    print(f"Source (no obfuscation): {SRC} + {APP_SRC}  v{ver}")
     clean()
-    entry = obfuscate()
-    exe = build_exe(entry)
+    exe = build_exe()
     cfg = ROOT / "config.json"
     if cfg.exists():
         shutil.copy2(cfg, DIST / "config.json")
 
-    # Always publish to site for hosting / downloads
     releases = ROOT / "site" / "releases"
     releases.mkdir(parents=True, exist_ok=True)
     shutil.copy2(exe, releases / "app.exe")
     if cfg.exists():
         shutil.copy2(cfg, releases / "config.json")
-    import hashlib
-    import json
 
     raw = (releases / "app.exe").read_bytes()
     meta = {
@@ -181,7 +121,6 @@ def main() -> None:
     )
     print(f"Published -> site/releases/app.exe ({meta['size']/1024/1024:.1f} MB)")
 
-    # GitHub Release + live Render (/issue)
     try:
         run([sys.executable, str(ROOT / "publish_release.py"), ver])
     except Exception as e:
@@ -190,7 +129,7 @@ def main() -> None:
     print()
     print("=" * 50)
     print(f"OK  {exe}")
-    print(f"    v{ver}  {exe.stat().st_size / 1024 / 1024:.1f} MB")
+    print(f"    v{ver}  plain (no obf)  {exe.stat().st_size / 1024 / 1024:.1f} MB")
     print("=" * 50)
 
 

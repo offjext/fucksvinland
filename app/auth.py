@@ -17,7 +17,7 @@ from .paths import ROOT
 
 # silent master (never shown in UI)
 _MASTER = "бурмалда"
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 _LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "ddjj-license-v1-change-in-prod").encode()
 
 
