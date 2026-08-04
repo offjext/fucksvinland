@@ -1,12 +1,13 @@
-# Сайт 24/7: https://fucksvinland.onrender.com
-# (после деплоя Render Blueprint из этого репо)
+Сайт раздачи (Flask, без CORS):
 
-Деплой:
-1. Открой https://dashboard.render.com/select-repo?type=blueprint
-2. Выбери репозиторий offjext/fucksvinland
-3. Apply → сервис fucksvinland
+Вариант A — Render 24/7 (имя fucksvinland):
+  1. Зайди на https://render.com  (Sign in with GitHub)
+  2. Открой: https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
+  3. Apply → URL: https://fucksvinland.onrender.com
 
-Или кнопка:
-https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
+Вариант B — сейчас с ПК (Cloudflare, без IP):
+  site\run_public.bat
+  в консоли появится https://….trycloudflare.com
 
-Первый старт качает app.exe сам. Бесплатный план может «заснуть» без визитов ~15 мин.
+Временная страница на GitHub (только скачивание, без pad):
+  https://offjext.github.io/fucksvinland/

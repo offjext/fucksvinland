@@ -170,7 +170,8 @@ class App(tk.Tk):
         self.preview_paused = True
         self.withdraw()
         self.update_idletasks()
-        time.sleep(0.15)
+        # Give Windows/Minecraft time to redraw before we snapshot
+        time.sleep(0.35)
         try:
             box = RegionSelector(self, title).pick()
         finally:
@@ -262,6 +263,12 @@ class App(tk.Tk):
 
 
 def main() -> None:
+    try:
+        from .roi import _ensure_dpi_aware
+
+        _ensure_dpi_aware()
+    except Exception:
+        pass
     cfg = {}
     try:
         from .paths import CONFIG_PATH

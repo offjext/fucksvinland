@@ -37,14 +37,31 @@ def virtual_screen() -> tuple[int, int, int, int]:
         return int(m["left"]), int(m["top"]), int(m["width"]), int(m["height"])
 
 
+def _ensure_dpi_aware() -> None:
+    """Match mouse coords to pixels (Win10+). Safe to call more than once."""
+    try:
+        import ctypes
+
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PER_MONITOR_AWARE
+    except Exception:
+        try:
+            import ctypes
+
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
 class RegionSelector(tk.Toplevel):
     """Fullscreen drag-select over a live screenshot (game stays visible)."""
 
     def __init__(self, master: tk.Misc, title_hint: str) -> None:
+        _ensure_dpi_aware()
         super().__init__(master)
         self.result: dict | None = None
         self._x0 = self._y0 = 0
         self._rect = None
+        self._fill = None
         self._photo = None
 
         left, top, width, height = virtual_screen()
@@ -54,10 +71,12 @@ class RegionSelector(tk.Toplevel):
         try:
             with mss.mss() as sct:
                 raw = np.asarray(sct.grab(sct.monitors[0]))
-            rgb = raw[:, :, [2, 1, 0]]
+            rgb = raw[:, :, [2, 1, 0]].copy()
             img = Image.fromarray(rgb)
-            if img.size != (width, height):
-                img = img.resize((width, height), Image.Resampling.BILINEAR)
+            # Prefer native grab size (DPI-correct); resize window to match
+            gw, gh = img.size
+            if gw > 0 and gh > 0:
+                width, height = gw, gh
             self._photo = ImageTk.PhotoImage(img)
         except Exception:
             self._photo = None
@@ -84,13 +103,14 @@ class RegionSelector(tk.Toplevel):
         self.canvas.pack(fill=tk.BOTH, expand=True)
         if self._photo is not None:
             self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
-        self.canvas.create_rectangle(0, 0, width, 56, fill="#000000", stipple="gray50", outline="")
+        # solid banner — readable on any screenshot
+        self.canvas.create_rectangle(0, 0, width, 64, fill="#111111", outline="")
         self.canvas.create_text(
             width // 2,
-            28,
-            text=f"{title_hint}  |  тяни мышью  |  Esc — отмена",
-            fill="#ffffff",
-            font=("Segoe UI", 16, "bold"),
+            32,
+            text=f"{title_hint}  ·  зажми ЛКМ и тяни  ·  Esc — отмена",
+            fill="#00e5ff",
+            font=("Segoe UI", 18, "bold"),
         )
 
         self.canvas.bind("<ButtonPress-1>", self._down)
@@ -104,33 +124,50 @@ class RegionSelector(tk.Toplevel):
         self.focus_force()
         self.grab_set()
 
+    def _canvas_xy(self, e: tk.Event) -> tuple[int, int]:
+        # Prefer canvas coords (already mapped); fall back to root - virtual origin
+        if hasattr(e, "x") and hasattr(e, "y"):
+            return int(e.x), int(e.y)
+        return int(e.x_root - self._vx), int(e.y_root - self._vy)
+
     def _down(self, e: tk.Event) -> None:
-        self._x0, self._y0 = e.x_root, e.y_root
+        self._x0, self._y0 = self._canvas_xy(e)
         if self._rect is not None:
             self.canvas.delete(self._rect)
-        x = e.x_root - self._vx
-        y = e.y_root - self._vy
+        if self._fill is not None:
+            self.canvas.delete(self._fill)
+        x, y = self._x0, self._y0
+        # semi-transparent fill via stipple so the zone is obvious
+        self._fill = self.canvas.create_rectangle(
+            x, y, x, y, outline="", fill="#00e5ff", stipple="gray50"
+        )
         self._rect = self.canvas.create_rectangle(
-            x, y, x, y, outline="#00e5ff", width=3, fill=""
+            x, y, x, y, outline="#00e5ff", width=4, fill=""
         )
 
     def _drag(self, e: tk.Event) -> None:
         if self._rect is None:
             return
-        x0 = self._x0 - self._vx
-        y0 = self._y0 - self._vy
-        x1 = e.x_root - self._vx
-        y1 = e.y_root - self._vy
-        self.canvas.coords(self._rect, x0, y0, x1, y1)
+        x1, y1 = self._canvas_xy(e)
+        for item in (self._fill, self._rect):
+            if item is not None:
+                self.canvas.coords(item, self._x0, self._y0, x1, y1)
 
     def _up(self, e: tk.Event) -> None:
-        x0, x1 = sorted((self._x0, e.x_root))
-        y0, y1 = sorted((self._y0, e.y_root))
+        x1, y1 = self._canvas_xy(e)
+        x0, x1 = sorted((self._x0, x1))
+        y0, y1 = sorted((self._y0, y1))
         w, h = x1 - x0, y1 - y0
         if w < 8 or h < 8:
             self.result = None
         else:
-            self.result = {"left": int(x0), "top": int(y0), "width": int(w), "height": int(h)}
+            # Convert canvas/local to absolute screen for mss.grab
+            self.result = {
+                "left": int(x0 + self._vx),
+                "top": int(y0 + self._vy),
+                "width": int(w),
+                "height": int(h),
+            }
         self._finish()
 
     def _cancel(self, _e=None) -> None:
