@@ -1,16 +1,10 @@
-Сайт Flask (лицензия + скачивание, без CORS):
-
-СЕЙЧАС (ПК включён, туннель):
-  https://cat-daniel-ent-throat.trycloudflare.com
-
-ИМЯ fucksvinland (24/7):
+Сайт 24/7:
   https://fucksvinland.onrender.com
-  Деплой: https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
-  (Sign in with GitHub → Apply)
 
-Почему не fucksvinland.trycloudflare.com:
-  Cloudflare quick tunnel выдаёт только случайный поддомен.
-  Своё имя = Render или свой домен + Cloudflare Tunnel (аккаунт).
+Деплой (уже в аккаунте Render):
+  1. Открой https://render.com/deploy?repo=https://github.com/offjext/fucksvinland
+  2. Connect GitHub → выбери offjext/fucksvinland
+  3. Apply → жди ~3–5 мин пока зелёный Live
 
-Статика (скачивание с GitHub Releases, без pad):
-  https://offjext.github.io/fucksvinland/
+Если сервис уже есть: Dashboard → fucksvinland → Logs.
+Бесплатный план засыпает ~15 мин без визитов (первый запрос потом ~30с).
