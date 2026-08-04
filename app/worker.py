@@ -116,12 +116,11 @@ class FishWorker(threading.Thread):
         pad = int(t.get("hit_pad_px", 8))
         predict = int(t.get("predict_frames", 4))
         # 0 / missing wait_bite = wait forever for Fishing Bobber splashes
-        ocr_every = max(0.04, int(t.get("ocr_ms", 50)) / 1000.0)
-        grace_ms = int(t.get("cast_grace_ms", 800))
-        # Minecraft keeps sound subtitles on screen a long time — must stay CLEAR
-        # this long before a new "Fishing Bobber" can count as a bite.
-        # Longer = fewer false bites from OCR flicker on stale text.
-        subtitle_clear_ms = int(t.get("subtitle_clear_ms", 900))
+        ocr_every = max(0.025, int(t.get("ocr_ms", 30)) / 1000.0)
+        grace_ms = int(t.get("cast_grace_ms", 500))
+        # kept for config compat; bite no longer waits this long after clear
+        subtitle_clear_ms = int(t.get("subtitle_clear_ms", 0))
+        _ = subtitle_clear_ms
         # after cast: must see ambient Splashing within this window, else autofix
         ambient_fail_ms = int(t.get("ambient_fail_ms", t.get("no_splash_recast_ms", 1500)))
         # optional: 0=off. If >0 and ambient was OK then silent this long → autofix
@@ -164,6 +163,7 @@ class FishWorker(threading.Thread):
         last_zone: tuple[int, int] | None = None
         last_zone_t = 0.0
         last_yellow = False
+        last_target_sig: tuple | None = None  # reset click edge when blue↔yellow / zone moves
         stall_fixes = 0
         bar_gone_s = max(0.45, float(t.get("bar_gone_ms", 500)) / 1000.0)
         pull_wait_s = max(1.2, float(t.get("bar_wait_ms", 2500)) / 1000.0)
@@ -225,7 +225,7 @@ class FishWorker(threading.Thread):
             nonlocal cast_at, state, rare, prev_x, ignore_bite_until, line_out
             nonlocal bar_missing_since, was_in_zone, last_zone, last_zone_t, last_yellow
             nonlocal touch_at, pending_hit, splash_armed, ambient_ok, ambient_lost_at
-            nonlocal no_bite_since
+            nonlocal no_bite_since, last_target_sig
             if line_out:
                 self.log(f"skip cast (line out): {reason}")
                 state = "wait"
@@ -245,6 +245,7 @@ class FishWorker(threading.Thread):
             was_in_zone = False
             touch_at = 0.0
             pending_hit = False
+            last_target_sig = None
             splash_armed = False
             no_bite_since = 0.0
             ambient_ok = False
@@ -322,14 +323,13 @@ class FishWorker(threading.Thread):
                         visible = True
 
                     use_pad = rare_pad if (rare or is_yellow) else pad
-                    # During mini: only REAL overlap (predict burned the one-click budget early)
+                    # Mini: stick on blue/yellow (+ tiny predict toward block while approaching)
                     if state == "mini":
-                        in_zone = should_hit(white_x, zone, prev_x, use_pad, 0)
+                        in_zone = should_hit(white_x, zone, prev_x, use_pad, 2)
                         if not in_zone and zone is not None:
                             in_zone = bright_stick_in_zone(bar_raw, zone)
                     else:
-                        use_predict = max(1, predict)
-                        in_zone = should_hit(white_x, zone, prev_x, use_pad, use_predict)
+                        in_zone = should_hit(white_x, zone, prev_x, use_pad, max(1, predict))
 
                     # OCR as often as possible while waiting for splash
                     if state == "wait" and (now - last_ocr_submit) >= ocr_every:
@@ -340,17 +340,17 @@ class FishWorker(threading.Thread):
                         except Exception:
                             pass
 
-                    bite, text = async_ocr.consume_bite()
-                    # Never trust AsyncOcr edge alone — OCR flicker on stale
-                    # "Fishing Bobber" looks like a new bite. Main loop uses clear→appear.
+                    bite_edge, text = async_ocr.consume_bite()
                     bite = False
                     # less OCR spam in log
                     if state == "wait" and text and text != last_log_sub:
                         last_log_sub = text
+                        if bite_matched(text):
+                            self.log(f"субтитр: {text[:60]}")
 
                     if state == "wait" and line_out:
                         peek = text or async_ocr.peek_text()
-                        # Ambient cast confirm: water Splashing, not stale Fishing Bobber bite
+                        # Ambient cast confirm: water Splashing, not the bite line
                         bite_now = bite_matched(peek)
                         ambient = has_splash_word(peek) and not bite_now
 
@@ -364,25 +364,27 @@ class FishWorker(threading.Thread):
                             elif ambient_lost_at <= 0:
                                 ambient_lost_at = now
 
-                        # Stale Minecraft subtitles linger — arm only after CLEAR for N ms
+                        # After cast grace: reel the INSTANT "Fishing Bobber splashes" appears.
+                        # Stale leftover text is ignored via soft_reset/resync (no clear-wait).
                         if now < ignore_bite_until:
                             async_ocr.resync()
                             bite = False
-                            splash_armed = False
+                            splash_armed = not bite_now
                             no_bite_since = 0.0 if bite_now else (no_bite_since or now)
-                        elif bite_now:
+                        elif bite_edge or (bite_now and splash_armed):
+                            bite = True
+                            splash_armed = False
                             no_bite_since = 0.0
-                            if splash_armed:
-                                bite = True
-                                splash_armed = False
-                                self.log("клёв")
+                            self.log("клёв — Fishing Bobber splashes")
+                        elif bite_now:
+                            # Still showing old bite line from before cast — wait until it clears
+                            no_bite_since = 0.0
+                            splash_armed = False
                         else:
+                            # Screen clear → armed for the next bite immediately
+                            splash_armed = True
                             if no_bite_since <= 0:
                                 no_bite_since = now
-                            elif (now - no_bite_since) * 1000.0 >= subtitle_clear_ms:
-                                if not splash_armed:
-                                    splash_armed = True
-                                    async_ocr.resync()
 
                     if bite and (now < ignore_bite_until or not line_out):
                         bite = False
@@ -425,7 +427,7 @@ class FishWorker(threading.Thread):
                             elif splash_armed:
                                 self.status("ожидание клёва")
                             else:
-                                self.status("очистка субтитра…")
+                                self.status("ожидание клёва")
                         else:
                             autofix("леска не в воде")
 
@@ -441,16 +443,31 @@ class FishWorker(threading.Thread):
                             touch_at = 0.0
                             pending_hit = False
                             last_click = 0.0
+                            last_target_sig = None
                             self.status("мини")
+                            self.log("мини-игра: жду палочку на блок")
                         elif (now - pull_at) >= pull_wait_s:
                             autofix("нет полоски")
 
                     elif state == "mini":
-                        # Blue or rare yellow block: 1 RMB per time the tick enters the block
+                        # Stick moves by itself → when it hits blue OR rare yellow → 1× RMB
+                        # Yellow can appear many times: each new target gets its own click
                         if visible and zone is not None:
                             bar_missing_since = 0.0
                             if is_yellow:
                                 rare = True
+                            # New colored block (blue→yellow or zone jumped) = new click opportunity
+                            sig = (
+                                int(zone[0] // 6),
+                                int(zone[1] // 6),
+                                bool(is_yellow),
+                            )
+                            if sig != last_target_sig:
+                                last_target_sig = sig
+                                was_in_zone = False
+                                pending_hit = False
+                                touch_at = 0.0
+
                             do_click = False
                             if in_zone and not was_in_zone:
                                 touch_at = now
@@ -464,26 +481,38 @@ class FishWorker(threading.Thread):
                                 and (now - touch_at) >= touch_delay
                                 and (now - last_click) >= hit_cooldown
                             ):
-                                do_click = True
-                                pending_hit = False
+                                # Prefer real overlap at click time (not only predict)
+                                on_block = should_hit(white_x, zone, None, use_pad, 0)
+                                if not on_block:
+                                    on_block = bright_stick_in_zone(bar_raw, zone)
+                                if on_block or (now - touch_at) >= touch_delay + 0.03:
+                                    do_click = True
+                                    pending_hit = False
                             if do_click:
                                 mini_click()
                                 last_click = now
-                                self.status("клик" + (" ★" if rare else ""))
+                                self.status("клик" + (" ★" if is_yellow or rare else ""))
+                                self.log("мини RMB" + (" yellow" if is_yellow else " blue"))
                             elif pending_hit and touch_at > 0:
                                 left = max(0.0, touch_delay - (now - touch_at))
                                 self.status(f"мини {left*1000:.0f}мс")
                             else:
-                                self.status("мини" + (" ·" if in_zone else ""))
+                                self.status(
+                                    "мини"
+                                    + (" ★" if is_yellow else "")
+                                    + (" ·" if in_zone else "")
+                                )
                             was_in_zone = in_zone
                         else:
                             was_in_zone = False
                             pending_hit = False
                             touch_at = 0.0
+                            last_target_sig = None
                             if bar_missing_since <= 0:
                                 bar_missing_since = now
                             else:
-                                limit = bar_gone_s * (2.5 if rare else 1.0)
+                                # Rare yellow waves: wait longer before giving up
+                                limit = bar_gone_s * (3.0 if rare else 1.0)
                                 if (now - bar_missing_since) >= limit:
                                     autofix("полоска пропала")
                         if state == "mini" and (now - mini_at) * 1000.0 >= t["minigame_timeout_ms"]:

@@ -17,7 +17,7 @@ from .paths import ROOT
 
 # silent master (never shown in UI)
 _MASTER = "бурмалда"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.4"
 _LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "ddjj-license-v1-change-in-prod").encode()
 
 
@@ -61,7 +61,7 @@ def ask_access_password(cfg: dict | None = None) -> bool:
         while True:
             pwd = simpledialog.askstring(
                 " ",
-                "Лицензия:",
+                "Пароль:",
                 show="*",
                 parent=root,
             )
@@ -71,7 +71,7 @@ def ask_access_password(cfg: dict | None = None) -> bool:
                 return True
             if _license_ok_local(pwd) or _license_ok_remote(cfg, pwd):
                 return True
-            messagebox.showerror(" ", "Неверная лицензия", parent=root)
+            messagebox.showerror(" ", "Неверный пароль", parent=root)
     finally:
         root.destroy()
 

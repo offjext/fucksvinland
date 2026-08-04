@@ -1,5 +1,5 @@
 """
-Сайт раздачи: рандомное имя/размер, лицензии, API обновлений.
+Сайт раздачи: рандомное имя/размер, пароли, API обновлений.
 Прод: gunicorn -b 0.0.0.0:$PORT server:app
 """
 from __future__ import annotations
@@ -52,7 +52,7 @@ PAGE = """
   <div class="box">
     <h1>fucksvinland</h1>
     {% if license %}
-      <p class="ok">Твоя лицензия — сохрани и вводи при запуске:</p>
+      <p class="ok">Твой пароль — сохрани и вводи при запуске:</p>
       <div class="lic">{{ license }}</div>
       <a class="btn" href="{{ download_url }}">Скачать файл</a>
       <p>v{{ version }}</p>
@@ -257,7 +257,7 @@ RELEASES.mkdir(parents=True, exist_ok=True)
 
 def ensure_exe() -> None:
     """Pull app.exe from GitHub Release when missing or version outdated."""
-    want = (os.environ.get("EXE_VERSION") or "1.0.3").strip()
+    want = (os.environ.get("EXE_VERSION") or "1.0.4").strip()
     default_url = (
         f"https://github.com/offjext/fucksvinland/releases/download/v{want}/app.exe"
     )

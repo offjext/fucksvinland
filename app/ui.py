@@ -18,7 +18,7 @@ from .worker import FishWorker, PreviewWorker, WorkerHooks
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("fucksvinland")
+        self.title(" ")
         self.geometry("440x640")
         self.minsize(400, 580)
         self.configure(bg="#1a1a1a")
@@ -202,7 +202,7 @@ class App(tk.Tk):
 
     def pick_zone(self, key: str) -> None:
         if self.running():
-            messagebox.showwarning("fucksvinland", "Сначала стоп (F4).")
+            messagebox.showwarning(" ", "Сначала стоп (F4).")
             return
         title = "Бар" if key == "bar_roi" else "Текст"
         was_paused = self.preview_paused

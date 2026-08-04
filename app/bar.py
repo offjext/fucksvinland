@@ -168,7 +168,11 @@ def detect_bar(rgb: np.ndarray, colors: dict) -> tuple[bool, bool, int | None, t
 
 
 def detect_bar_fast(bgra: np.ndarray) -> tuple[bool, bool, int | None, tuple[int, int] | None]:
-    """Detect fishing minigame: white tick + blue OR rare yellow target block."""
+    """Detect fishing minigame: white tick + blue OR rare yellow target block.
+
+    Layout (Minecraft fishing UI): dark track | colored hit-block | mouse RMB icon on the right.
+    Always ignore the right mouse panel for detection.
+    """
     h, w = bgra.shape[:2]
     b = bgra[:, :, 0].astype(np.int16)
     g = bgra[:, :, 1].astype(np.int16)
@@ -178,40 +182,38 @@ def detect_bar_fast(bgra: np.ndarray) -> tuple[bool, bool, int | None, tuple[int
     if int(dark.sum()) < max(10, (h * w) // 16):
         return False, False, None, None
 
-    # Full width — blue target is often on the RIGHT; never crop it to 75%.
+    # Mouse RMB icon sits on the right — never treat it as the tick or the hit-block
+    track_w = max(32, int(w * 0.82))
+    rr, gg, bb = r[:, :track_w], g[:, :track_w], b[:, :track_w]
+
     cyan = (
-        (b > 90)
-        & (b < 240)
-        & (g > 50)
-        & (g < 210)
-        & (r < 130)
-        & (b > r + 20)
-        & (b >= g - 8)
-        & (g > r + 8)
+        (bb > 90)
+        & (bb < 240)
+        & (gg > 50)
+        & (gg < 210)
+        & (rr < 130)
+        & (bb > rr + 20)
+        & (bb >= gg - 8)
+        & (gg > rr + 8)
     )
-    # Rare yellow = solid block like blue. Thin dashes / mouse frame excluded later.
+    # Rare yellow / gold = same solid block shape as blue
     yel = (
-        (r > 130)
-        & (g > 100)
-        & (b < 140)
-        & (r >= g - 25)
-        & (r > b + 25)
-        & (g > b + 15)
-        & ((r.astype(np.int32) + g) > 240)
-        & (r + g > 2 * b + 40)
+        (rr > 130)
+        & (gg > 100)
+        & (bb < 140)
+        & (rr >= gg - 25)
+        & (rr > bb + 25)
+        & (gg > bb + 15)
+        & ((rr.astype(np.int32) + gg) > 240)
+        & (rr + gg > 2 * bb + 40)
     )
 
-    # Low min_col vs full ROI height (padding is black); validate solid height after.
-    b_zone = find_zone(cyan, 0.60, min_col=max(3, h // 40), min_width=12)
-    y_zone = find_zone(yel, 0.60, min_col=max(3, h // 40), min_width=12)
+    b_zone = find_zone(cyan, 0.70, min_col=max(3, h // 40), min_width=10)
+    y_zone = find_zone(yel, 0.70, min_col=max(3, h // 40), min_width=10)
 
     if b_zone is not None and zone_column_height(cyan, b_zone) < 8:
         b_zone = None
-    # Real rare block is tall like blue (~track height). Dashes are 1–4px.
     if y_zone is not None and zone_column_height(yel, y_zone) < 10:
-        y_zone = None
-    # Mouse / UI yellow on far right is not the hit zone
-    if y_zone is not None and y_zone[0] > int(w * 0.82):
         y_zone = None
 
     is_yellow = False
@@ -220,7 +222,7 @@ def detect_bar_fast(bgra: np.ndarray) -> tuple[bool, bool, int | None, tuple[int
         y_score = zone_fill_score(yel, y_zone)
         b_score = zone_fill_score(cyan, b_zone) if b_zone is not None else 0.0
         yw = y_zone[1] - y_zone[0]
-        if y_score >= 0.45 and yw >= 12 and (b_zone is None or y_score >= b_score * 0.70):
+        if y_score >= 0.40 and yw >= 10 and (b_zone is None or y_score >= b_score * 0.65):
             is_yellow = True
             zone = y_zone
         else:
@@ -230,26 +232,30 @@ def detect_bar_fast(bgra: np.ndarray) -> tuple[bool, bool, int | None, tuple[int
 
     if zone is not None:
         zw = zone[1] - zone[0]
-        if zw < 10 or zw > max(80, int(w * 0.60)):
+        if zw < 8 or zw > max(80, int(track_w * 0.70)):
             zone = None
             is_yellow = False
 
-    # White tick across almost full bar (leave a sliver for mouse chrome)
-    tick_w = max(8, int(w * 0.95))
-    rt, gt, bt = r[:, :tick_w], g[:, :tick_w], b[:, :tick_w]
-    lum_t = (rt + gt + bt) // 3
-    near_w = (np.abs(rt - gt) <= 30) & (np.abs(gt - bt) <= 30)
+    # Thin vertical white stick (not the fat mouse-button highlight)
+    lum_t = (rr + gg + bb) // 3
+    near_w = (np.abs(rr - gg) <= 35) & (np.abs(gg - bb) <= 35)
     left = np.pad(lum_t, ((0, 0), (2, 0)), mode="edge")[:, :-2]
     right = np.pad(lum_t, ((0, 0), (0, 2)), mode="edge")[:, 2:]
-    peak = (lum_t >= left + 28) & (lum_t >= right + 28) & (lum_t >= 140) & near_w
-    soft = (lum_t >= 165) & near_w
-    score = peak.sum(axis=0).astype(np.float64) * 4.0 + soft.sum(axis=0).astype(np.float64)
+    peak = (lum_t >= left + 22) & (lum_t >= right + 22) & (lum_t >= 110) & near_w
+    soft = (lum_t >= 145) & near_w
+    score = peak.sum(axis=0).astype(np.float64) * 5.0 + soft.sum(axis=0).astype(np.float64)
+    # Prefer narrow columns (stick is ~2–4px; mouse chrome is wide)
+    if score.size >= 5:
+        wide = np.convolve(score > 0, np.ones(9), mode="same")
+        score = score / (1.0 + np.maximum(0.0, wide - 3.0))
+
     white_x = None
-    if float(score.max()) >= 1.5:
+    if float(score.max()) >= 1.2:
         x = int(np.argmax(score))
-        left_s = float(score[x - 6]) if x >= 6 else 0.0
-        right_s = float(score[x + 6]) if x + 6 < tick_w else 0.0
-        if score[x] >= max(left_s, right_s, 1.0) * 1.05:
+        # local peak
+        lo = max(0, x - 4)
+        hi = min(track_w, x + 5)
+        if score[x] >= float(score[lo:hi].max()) * 0.95:
             white_x = x
 
     visible = zone is not None
@@ -263,7 +269,7 @@ def should_hit(
     pad: int,
     predict_frames: int,
 ) -> bool:
-    """True if tick is on the block now, or will reach it (for early 20ms arm)."""
+    """True if the white stick overlaps the blue/yellow block (optional light predict)."""
     if white_x is None or zone is None:
         return False
     x0, x1 = zone
@@ -276,11 +282,13 @@ def should_hit(
     if vx == 0:
         return False
     mid = 0.5 * (x0 + x1)
-    # Arm early only when moving toward the block
-    steps = max(1, min(int(predict_frames), 6))
+    # Only predict when moving toward the block
+    if (mid - white_x) * vx <= 0:
+        return False
+    steps = max(1, min(int(predict_frames), 4))
     for step in range(1, steps + 1):
         px = white_x + vx * step
-        if lo <= px <= hi and abs(px - mid) <= abs(white_x - mid) + abs(vx):
+        if lo <= px <= hi:
             return True
     return False
 
