@@ -1,0 +1,21 @@
+---
+description: Always publish fishing app builds to the live site
+alwaysApply: true
+---
+
+# Site publish (fucksvinland)
+
+After any change that affects the runnable fishing app (`app/`, `ddjj.py`, `config.json` timing/minigame, OCR, zones), ship it to the public site — do not leave only `run.bat` updated.
+
+## Required steps
+
+1. Bump `VERSION.txt` (patch +0.0.1) when shipping a user-facing fix.
+2. Run `python build_exe.py` — it builds exe, copies to `site/releases/`, then runs `publish_release.py` which:
+   - uploads GitHub Release `v{VERSION}`
+   - POSTs exe to `https://fucksvinland.onrender.com/api/publish`
+3. Confirm `https://fucksvinland.onrender.com/api/version` shows the new version.
+4. Commit/push repo changes (including `VERSION.txt`, `site/releases/meta.json`, `site/static_pages/version.json`).
+
+If a full rebuild is too heavy for a tiny non-exe change, still run `python publish_release.py` when `site/releases/app.exe` already matches the intended build.
+
+Do not tell the user the site is updated without verifying `/api/version`.

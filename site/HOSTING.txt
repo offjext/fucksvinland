@@ -1,6 +1,6 @@
 Сайт 24/7: https://fucksvinland.onrender.com
-Версия exe: 1.0.2 (должна совпадать с run.bat / dist)
+Версия: см. VERSION.txt /api/version
 
-Скачать: https://fucksvinland.onrender.com/issue
-После обновления кода: python build_exe.py && python publish_release.py && git push
-(Render подтянет EXE_VERSION из render.yaml при деплое)
+Сборка+выкладка всегда:
+  python build_exe.py
+(внутри: GitHub Release + POST на Render /api/publish)

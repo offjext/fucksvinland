@@ -257,7 +257,7 @@ RELEASES.mkdir(parents=True, exist_ok=True)
 
 def ensure_exe() -> None:
     """Pull app.exe from GitHub Release when missing or version outdated."""
-    want = (os.environ.get("EXE_VERSION") or "1.0.2").strip()
+    want = (os.environ.get("EXE_VERSION") or "1.0.3").strip()
     default_url = (
         f"https://github.com/offjext/fucksvinland/releases/download/v{want}/app.exe"
     )

@@ -34,7 +34,7 @@
   "timing": {
     "scan_ms": 16,
     "ocr_ms": 40,
-    "click_cooldown_ms": 100,
+    "click_cooldown_ms": 60,
     "recast_delay_ms": 400,
     "after_catch_ms": 0,
     "after_reel_ms": 50,
@@ -48,7 +48,7 @@
     "bar_wait_ms": 6000,
     "bar_gone_ms": 700,
     "minigame_timeout_ms": 25000,
-    "predict_frames": 4,
+    "predict_frames": 2,
     "hit_pad_px": 8,
     "rare_hit_pad_px": 8,
     "touch_delay_ms": 20

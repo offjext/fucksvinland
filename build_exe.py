@@ -142,10 +142,18 @@ def build_exe(entry: Path) -> Path:
     return exe
 
 
+def _version() -> str:
+    p = ROOT / "VERSION.txt"
+    if p.exists():
+        return p.read_text(encoding="utf-8").strip() or "1.0.0"
+    return "1.0.0"
+
+
 def main() -> None:
     if not SRC.exists() or not APP_SRC.exists():
         raise SystemExit("Need ddjj.py and app/ package")
-    print(f"Source: {SRC} + {APP_SRC}")
+    ver = _version()
+    print(f"Source: {SRC} + {APP_SRC}  v{ver}")
     clean()
     entry = obfuscate()
     exe = build_exe(entry)
@@ -164,7 +172,7 @@ def main() -> None:
 
     raw = (releases / "app.exe").read_bytes()
     meta = {
-        "version": "1.0.2",
+        "version": ver,
         "sha256": hashlib.sha256(raw).hexdigest(),
         "size": len(raw),
     }
@@ -173,10 +181,16 @@ def main() -> None:
     )
     print(f"Published -> site/releases/app.exe ({meta['size']/1024/1024:.1f} MB)")
 
+    # GitHub Release + live Render (/issue)
+    try:
+        run([sys.executable, str(ROOT / "publish_release.py"), ver])
+    except Exception as e:
+        print("WARN site upload failed:", e)
+
     print()
     print("=" * 50)
     print(f"OK  {exe}")
-    print(f"    size {exe.stat().st_size / 1024 / 1024:.1f} MB")
+    print(f"    v{ver}  {exe.stat().st_size / 1024 / 1024:.1f} MB")
     print("=" * 50)
 
 

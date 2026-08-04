@@ -15,6 +15,7 @@ from .bar import (
     detect_bar_fast,
     should_hit,
     thumb_bar,
+    thumb_bar_fast,
     thumb_sub,
 )
 from .frames import FrameBus
@@ -167,8 +168,8 @@ class FishWorker(threading.Thread):
         bar_gone_s = max(0.45, float(t.get("bar_gone_ms", 500)) / 1000.0)
         pull_wait_s = max(1.2, float(t.get("bar_wait_ms", 2500)) / 1000.0)
         cast_gap = max(0.5, recast_pause)
-        # see touch / will-hit → wait 30ms → 1× RMB (blue and yellow same)
-        hit_cooldown = max(0.08, click_cd / 1000.0)
+        # see real touch on blue/yellow → wait 20ms → 1× RMB per pass
+        hit_cooldown = max(0.05, click_cd / 1000.0)
         touch_delay = max(0.0, float(t.get("touch_delay_ms", 20)) / 1000.0)
         rare_pad = max(pad, int(t.get("rare_hit_pad_px", pad)))
         fps_ema = 60.0
@@ -186,7 +187,7 @@ class FishWorker(threading.Thread):
         def _valid_roi(roi: dict) -> bool:
             return all(k in roi for k in ("left", "top", "width", "height")) and int(
                 roi.get("width", 0)
-            ) >= 40 and int(roi.get("height", 0)) >= 30
+            ) >= 40 and int(roi.get("height", 0)) >= 16
 
         def full_crops(mon: dict) -> tuple[dict, dict]:
             """Prefer saved bar ROI (wide auto crop false-triggers on water/sky)."""
@@ -321,11 +322,14 @@ class FishWorker(threading.Thread):
                         visible = True
 
                     use_pad = rare_pad if (rare or is_yellow) else pad
-                    # Predict blue+yellow so 20ms timer starts before tick fully enters
-                    use_predict = max(1, predict)
-                    in_zone = should_hit(white_x, zone, prev_x, use_pad, use_predict)
-                    if state == "mini" and not in_zone and zone is not None:
-                        in_zone = bright_stick_in_zone(bar_raw, zone)
+                    # During mini: only REAL overlap (predict burned the one-click budget early)
+                    if state == "mini":
+                        in_zone = should_hit(white_x, zone, prev_x, use_pad, 0)
+                        if not in_zone and zone is not None:
+                            in_zone = bright_stick_in_zone(bar_raw, zone)
+                    else:
+                        use_predict = max(1, predict)
+                        in_zone = should_hit(white_x, zone, prev_x, use_pad, use_predict)
 
                     # OCR as often as possible while waiting for splash
                     if state == "wait" and (now - last_ocr_submit) >= ocr_every:
@@ -442,24 +446,18 @@ class FishWorker(threading.Thread):
                             autofix("нет полоски")
 
                     elif state == "mini":
+                        # Blue or rare yellow block: 1 RMB per time the tick enters the block
                         if visible and zone is not None:
                             bar_missing_since = 0.0
                             if is_yellow:
                                 rare = True
                             do_click = False
-                            # blue + yellow: saw will-hit → wait touch_delay_ms (20) → one RMB
                             if in_zone and not was_in_zone:
                                 touch_at = now
                                 pending_hit = True
-                            # brief flicker out of zone during wait: keep pending (don't miss)
                             if not in_zone:
-                                if not (
-                                    pending_hit
-                                    and touch_at > 0
-                                    and (now - touch_at) < touch_delay + 0.04
-                                ):
-                                    pending_hit = False
-                                    touch_at = 0.0
+                                pending_hit = False
+                                touch_at = 0.0
                             elif (
                                 pending_hit
                                 and touch_at > 0
@@ -471,16 +469,13 @@ class FishWorker(threading.Thread):
                             if do_click:
                                 mini_click()
                                 last_click = now
-                                self.status("клик" + (" ★" if (rare or is_yellow) else ""))
+                                self.status("клик" + (" ★" if rare else ""))
+                            elif pending_hit and touch_at > 0:
+                                left = max(0.0, touch_delay - (now - touch_at))
+                                self.status(f"мини {left*1000:.0f}мс")
                             else:
-                                wait_ms = ""
-                                if pending_hit and touch_at > 0:
-                                    left = max(0.0, touch_delay - (now - touch_at))
-                                    wait_ms = f" {left*1000:.0f}мс"
-                                self.status("мини" + (" ·" if in_zone else "") + wait_ms)
-                            was_in_zone = in_zone if in_zone else (
-                                pending_hit and touch_at > 0 and (now - touch_at) < touch_delay + 0.04
-                            )
+                                self.status("мини" + (" ·" if in_zone else ""))
+                            was_in_zone = in_zone
                         else:
                             was_in_zone = False
                             pending_hit = False
@@ -497,23 +492,31 @@ class FishWorker(threading.Thread):
                     if white_x is not None:
                         prev_x = white_x
 
-                    # steady preview ~every 6 frames
+                    # Preview: cheap/rare during mini so bar loop stays ~60fps
                     ui_n += 1
-                    if ui_n >= 6:
+                    ui_every = 12 if state == "mini" else 6
+                    if ui_n >= ui_every:
                         ui_n = 0
                         rgb = bar_raw[:, :, [2, 1, 0]]
-                        self.hooks.frames.push(
-                            thumb_bar(rgb, white_x, zone, bool(in_zone and visible)),
-                            None,
-                            fps_ema,
+                        thumb = (
+                            thumb_bar_fast(rgb, white_x, zone, bool(in_zone and visible))
+                            if state == "mini"
+                            else thumb_bar(rgb, white_x, zone, bool(in_zone and visible))
                         )
+                        self.hooks.frames.push(thumb, None, fps_ema)
 
                     dt = max(1e-6, time.perf_counter() - frame_t0)
                     inst = 1.0 / dt
                     fps_ema = fps_ema * 0.9 + inst * 0.1
-                    sleep = target - (time.perf_counter() - frame_t0)
-                    if sleep > 0:
-                        time.sleep(sleep)
+                    # Don't sleep in mini if already behind — chase tick
+                    if state != "mini":
+                        sleep = target - (time.perf_counter() - frame_t0)
+                        if sleep > 0:
+                            time.sleep(sleep)
+                    else:
+                        sleep = target - (time.perf_counter() - frame_t0)
+                        if sleep > 0.002:
+                            time.sleep(sleep)
         finally:
             async_ocr.stop()
             if self.hooks.set_preview_paused:

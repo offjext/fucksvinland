@@ -14,7 +14,8 @@ def in_range(rgb: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
 def find_white_x(rgb: np.ndarray, white_min: np.ndarray) -> int | None:
     """Thin gray/white vertical tick on dark track (often ~170, not pure 255)."""
     h, w, _ = rgb.shape
-    track_w = max(8, int(w * 0.78))  # exclude mouse icon panel on the right
+    # Full bar width — tick often sits on the right half of the blue/yellow block
+    track_w = w
     r = rgb[:, :track_w, 0].astype(np.int16)
     g = rgb[:, :track_w, 1].astype(np.int16)
     b = rgb[:, :track_w, 2].astype(np.int16)
@@ -319,22 +320,28 @@ def annotate_bar(rgb: np.ndarray, white_x: int | None, zone: tuple[int, int] | N
 
 
 def _fit_preview(img: Image.Image, tw: int, th: int, bg: tuple[int, int, int] = (18, 18, 22)) -> Image.Image:
-    """Letterbox into fixed size so Tk canvases always show a clear frame."""
+    """Letterbox into fixed size — vectorized (no putpixel loops)."""
     from PIL import ImageOps
 
     canvas = Image.new("RGB", (tw, th), bg)
-    # thin cyan frame
-    for x in range(tw):
-        canvas.putpixel((x, 0), (0, 200, 220))
-        canvas.putpixel((x, th - 1), (0, 200, 220))
-    for y in range(th):
-        canvas.putpixel((0, y), (0, 200, 220))
-        canvas.putpixel((tw - 1, y), (0, 200, 220))
     fitted = ImageOps.contain(img.convert("RGB"), (tw - 6, th - 6), Image.Resampling.BILINEAR)
     x = (tw - fitted.width) // 2
     y = (th - fitted.height) // 2
     canvas.paste(fitted, (x, y))
-    return canvas
+    arr = np.asarray(canvas)
+    out = arr.copy()
+    out[0, :] = (0, 200, 220)
+    out[-1, :] = (0, 200, 220)
+    out[:, 0] = (0, 200, 220)
+    out[:, -1] = (0, 200, 220)
+    return Image.fromarray(out)
+
+
+def thumb_bar_fast(rgb: np.ndarray, white_x: int | None, zone: tuple[int, int] | None, hit: bool) -> Image.Image:
+    """Cheap live thumb for fishing loop (no letterbox cost)."""
+    img = annotate_bar(rgb, white_x, zone, hit)
+    img.thumbnail((360, 72), Image.Resampling.BILINEAR)
+    return img
 
 
 def thumb_bar(rgb: np.ndarray, white_x: int | None, zone: tuple[int, int] | None, hit: bool) -> Image.Image:
